@@ -1,24 +1,45 @@
 package main
 
 import (
+	"github.com/joho/godotenv"
 	"github.com/keyjin88/todo-app"
 	"github.com/keyjin88/todo-app/pkg/handler"
 	"github.com/keyjin88/todo-app/pkg/repository"
 	"github.com/keyjin88/todo-app/pkg/service"
+	_ "github.com/lib/pq"
 	"github.com/spf13/viper"
 	"log"
+	"os"
 )
 
 func main() {
 	if err := initConfig(); err != nil {
 		log.Fatalf("error initializing config: %s", err.Error())
 	}
-	repos := repository.New()
+
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("error loading env variables: %s", err.Error())
+
+	}
+
+	db, err := repository.NewPostgresDB(repository.Config{
+		Host:     viper.GetString("db.host"),
+		Port:     viper.GetString("db.port"),
+		Username: viper.GetString("db.username"),
+		Password: os.Getenv("DB_PASSWORD"),
+		DBName:   viper.GetString("db.dbname"),
+		SSLMode:  viper.GetString("db.sslmode"),
+	})
+	if err != nil {
+		log.Fatalf("error to initialize db: %s", err.Error())
+	}
+
+	repos := repository.New(db)
 	services := service.New(repos)
 	handlers := handler.New(services)
 
 	srv := new(todo.Server)
-	if err := srv.Run(viper.GetString("8000"), handlers.InitRoute()); err != nil {
+	if err := srv.Run(viper.GetString("port"), handlers.InitRoute()); err != nil {
 		log.Fatalf("error occurred while server running: %s", err.Error())
 	}
 }
